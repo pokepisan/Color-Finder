@@ -286,7 +286,7 @@ public class MainForm : Form
     {
         if (_image == null) return;
 
-        if (e.Button == MouseButtons.Middle)
+        if (e.Button == MouseButtons.Middle || e.Button == MouseButtons.Right)
         {
             _isPanning       = true;
             _panStart        = e.Location;
@@ -325,7 +325,7 @@ public class MainForm : Form
 
     private void ImagePanel_MouseUp(object? sender, MouseEventArgs e)
     {
-        if (_isPanning && e.Button == MouseButtons.Middle)
+        if (_isPanning && (e.Button == MouseButtons.Middle || e.Button == MouseButtons.Right))
         {
             _isPanning         = false;
             _imagePanel.Cursor = Cursors.Cross;
