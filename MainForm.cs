@@ -280,17 +280,21 @@ public class MainForm : Form
             using (var swatchBorder = new Pen(Color.FromArgb(55, 255, 255, 255), 1f))
                 g.DrawPath(swatchBorder, swatchPath);
 
-            // name + category
+            // calculate percentage position first so name can be clipped to it
             int textX = sx + swatchSize + 10;
-            g.DrawString(m.Pigment.Name, nameFont, Brushes.White, textX, y + 7);
-            g.DrawString(m.Pigment.Category, catFont,
-                new SolidBrush(Color.FromArgb(90, 90, 90)), textX, y + 27);
-
-            // percentage — warm gold accent
             var pctStr  = $"{m.Percentage}%";
             var pctSize = g.MeasureString(pctStr, pctFont);
             float pctX  = margin + cardW - pctSize.Width - 12;
             float pctY  = y + (cardH - pctSize.Height) / 2f;
+
+            // name clipped so it never overlaps the percentage
+            float nameMaxW = Math.Max(20f, pctX - textX - 6);
+            using var nameSf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter };
+            g.DrawString(m.Pigment.Name, nameFont, Brushes.White,
+                new RectangleF(textX, y + 7, nameMaxW, 20), nameSf);
+            g.DrawString(m.Pigment.Category, catFont,
+                new SolidBrush(Color.FromArgb(90, 90, 90)), textX, y + 27);
+
             g.DrawString(pctStr, pctFont,
                 new SolidBrush(Color.FromArgb(215, 180, 75)), pctX, pctY);
 
