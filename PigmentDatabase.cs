@@ -19,14 +19,14 @@ public static class PigmentDatabase
         new("Hansa Yellow",            "Yellow",       238, 218,  47),
         new("Indian Yellow",           "Yellow",       228, 186,  52),
         new("Naples Yellow",           "Yellow",       254, 223, 128),
-        new("Yellow Ochre",            "Earth",        204, 153,  51),
-        new("Gold Ochre",              "Earth",        196, 154,  60),
-        new("Raw Sienna",              "Earth",        181, 133,  65),
+        new("Yellow Ochre",            "Earth",        192, 148,  56),
+        new("Gold Ochre",              "Earth",        184, 148,  62),
+        new("Raw Sienna",              "Earth",        168, 122,  58),
 
         // Oranges
         new("Cadmium Orange",          "Orange",       236,  97,  28),
-        new("Burnt Sienna",            "Earth",        150,  73,  38),
-        new("Transparent Red Oxide",   "Earth",        165,  68,  46),
+        new("Burnt Sienna",            "Earth",        143,  68,  38),
+        new("Transparent Red Oxide",   "Earth",        158,  60,  40),
 
         // Reds
         new("Vermilion",               "Red",          227,  66,  52),
@@ -57,20 +57,21 @@ public static class PigmentDatabase
         new("Cobalt Teal",             "Blue/Green",     0, 167, 181),
         new("Indanthrone Blue",        "Blue",          30,  50, 100),
 
-        // Greens
-        new("Viridian",                "Green",         64, 130, 109),
-        new("Phthalo Green",           "Green",         18, 107,  57),
-        new("Cadmium Green",           "Green",          0, 107,  60),
-        new("Sap Green",               "Green",         80, 125,  42),
-        new("Chromium Oxide Green",    "Green",        100, 130,  90),
-        new("Terre Verte",             "Green",        144, 168, 127),
-        new("Cobalt Green",            "Green",         60, 144, 108),
-        new("Hooker's Green",          "Green",         40, 100,  65),
+        // Greens — values based on spectrophotometer-measured mass tones
+        new("Viridian",                "Green",         35, 105,  83),
+        new("Phthalo Green",           "Green",         12,  75,  44),
+        new("Cadmium Green",           "Green",          0,  98,  55),
+        new("Sap Green",               "Green",         58,  90,  28),
+        new("Olive Green",             "Green",         80,  92,  46),
+        new("Chromium Oxide Green",    "Green",         72, 108,  68),
+        new("Terre Verte",             "Green",        102, 122,  88),
+        new("Cobalt Green",            "Green",         48, 128,  95),
+        new("Hooker's Green",          "Green",         38,  74,  45),
 
-        // Browns / Earth
-        new("Burnt Umber",             "Earth",        138,  87,  53),
-        new("Raw Umber",               "Earth",        115,  97,  72),
-        new("Van Dyke Brown",          "Earth",         93,  67,  46),
+        // Browns / Earth — updated to measured mass tones
+        new("Burnt Umber",             "Earth",        110,  62,  36),
+        new("Raw Umber",               "Earth",         92,  78,  58),
+        new("Van Dyke Brown",          "Earth",         80,  55,  36),
 
         // Blacks / Grays
         new("Neutral Gray Light",      "Gray",         200, 200, 198),

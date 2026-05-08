@@ -13,6 +13,15 @@ public static class ColorAnalyzer
             .Select(p => ColorUtils.RgbToLab(p.R, p.G, p.B))
             .ToArray();
 
+    private static readonly int WhiteIdx =
+        Array.FindIndex(PigmentDatabase.Pigments, p => p.Name == "Titanium White");
+    private static readonly int BlackIdx =
+        Array.FindIndex(PigmentDatabase.Pigments, p => p.Name == "Ivory Black");
+
+    // These pigments are expressed as Titanium White + Ivory Black ratios instead
+    private static readonly HashSet<string> NeutralGreyNames =
+        ["Neutral Gray Light", "Neutral Gray", "Davy's Gray"];
+
     public static List<ColorMatch> Analyze(Bitmap bmp, Rectangle selection, int numColors)
     {
         var pixels = SamplePixels(bmp, selection, maxSamples: 6000);
@@ -42,13 +51,51 @@ public static class ColorAnalyzer
         for (int k = 0; k < numColors; k++)
         {
             if (counts[k] == 0) continue;
-            var pigment     = NearestPigment(centroids[k]);
-            int percentage  = (int)Math.Round(counts[k] * 100.0 / total);
+            var pigment    = NearestPigment(centroids[k]);
+            int percentage = (int)Math.Round(counts[k] * 100.0 / total);
             var displayColor = Color.FromArgb(
                 (int)(clusterR[k] / counts[k]),
                 (int)(clusterG[k] / counts[k]),
                 (int)(clusterB[k] / counts[k]));
-            raw.Add(new ColorMatch(pigment, percentage, displayColor));
+
+            if (NeutralGreyNames.Contains(pigment.Name))
+            {
+                double chroma = Math.Sqrt(centroids[k].A * centroids[k].A +
+                                          centroids[k].B * centroids[k].B);
+
+                if (chroma < 8.0)
+                {
+                    // Truly neutral — decompose into Titanium White + Ivory Black
+                    double lWhite = PigmentLab[WhiteIdx].L;
+                    double lBlack = PigmentLab[BlackIdx].L;
+                    double wFrac  = Math.Clamp((centroids[k].L - lBlack) / (lWhite - lBlack), 0, 1);
+
+                    int wPct = (int)Math.Round(percentage * wFrac);
+                    int bPct = percentage - wPct;
+
+                    var whiteColor = Color.FromArgb(
+                        PigmentDatabase.Pigments[WhiteIdx].R,
+                        PigmentDatabase.Pigments[WhiteIdx].G,
+                        PigmentDatabase.Pigments[WhiteIdx].B);
+                    var blackColor = Color.FromArgb(
+                        PigmentDatabase.Pigments[BlackIdx].R,
+                        PigmentDatabase.Pigments[BlackIdx].G,
+                        PigmentDatabase.Pigments[BlackIdx].B);
+
+                    if (wPct > 0) raw.Add(new ColorMatch(PigmentDatabase.Pigments[WhiteIdx], wPct, whiteColor));
+                    if (bPct > 0) raw.Add(new ColorMatch(PigmentDatabase.Pigments[BlackIdx], bPct, blackColor));
+                }
+                else
+                {
+                    // Chromatic color that happened to match a grey — find best coloured pigment
+                    pigment = NearestNonGreyPigment(centroids[k]);
+                    raw.Add(new ColorMatch(pigment, percentage, displayColor));
+                }
+            }
+            else
+            {
+                raw.Add(new ColorMatch(pigment, percentage, displayColor));
+            }
         }
 
         // Merge clusters that resolved to the same pigment
@@ -191,6 +238,19 @@ public static class ColorAnalyzer
         double bestDist = double.MaxValue;
         for (int i = 0; i < PigmentLab.Length; i++)
         {
+            double d = ColorUtils.DeltaE(lab, PigmentLab[i]);
+            if (d < bestDist) { bestDist = d; best = i; }
+        }
+        return PigmentDatabase.Pigments[best];
+    }
+
+    private static OilPigment NearestNonGreyPigment((double L, double A, double B) lab)
+    {
+        int best = 0;
+        double bestDist = double.MaxValue;
+        for (int i = 0; i < PigmentLab.Length; i++)
+        {
+            if (NeutralGreyNames.Contains(PigmentDatabase.Pigments[i].Name)) continue;
             double d = ColorUtils.DeltaE(lab, PigmentLab[i]);
             if (d < bestDist) { bestDist = d; best = i; }
         }

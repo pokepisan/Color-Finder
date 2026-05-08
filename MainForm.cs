@@ -80,17 +80,13 @@ public class MainForm : Form
         _analyzeBtn.Enabled = false;
         _analyzeBtn.Click  += Analyze_Click;
 
-        var copyBtn = new StyledButton("Copy Recipe", Color.FromArgb(80, 80, 80));
-        copyBtn.SetBounds(456, 10, 120, 32);
-        copyBtn.Click += CopyRecipe_Click;
-
         _statusLabel.Text      = "Open an image to begin";
         _statusLabel.ForeColor = Color.FromArgb(150, 150, 150);
         _statusLabel.AutoSize  = true;
-        _statusLabel.Location  = new Point(596, 20);
+        _statusLabel.Location  = new Point(456, 20);
 
         toolbar.Controls.AddRange([openBtn, colorsLabel, _numColorsSpinner,
-                                   _analyzeBtn, copyBtn, _statusLabel]);
+                                   _analyzeBtn, _statusLabel]);
 
         var mainSplit = new SplitContainer
         {
@@ -419,19 +415,6 @@ public class MainForm : Form
         }
     }
 
-    private void CopyRecipe_Click(object? sender, EventArgs e)
-    {
-        if (_matches.Count == 0)
-        {
-            _statusLabel.Text = "Nothing to copy — analyze a selection first";
-            return;
-        }
-
-        var lines = _matches.Select(m => $"{m.Pigment.Name}: {m.Percentage}%");
-        Clipboard.SetText("Color Recipe:\n" + string.Join("\n", lines));
-        _statusLabel.Text = "Recipe copied to clipboard";
-    }
-
     // ── Geometry helpers ─────────────────────────────────────────────────────
 
     // Returns the natural (zoom=1) fit size of the image inside the panel.
@@ -536,17 +519,22 @@ public class MainForm : Form
                      ControlStyles.OptimizedDoubleBuffer, true);
         }
 
-        protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
-        protected override void OnMouseEnter(EventArgs e)     { base.OnMouseEnter(e); _hovered = true;  Invalidate(); }
-        protected override void OnMouseLeave(EventArgs e)     { base.OnMouseLeave(e); _hovered = false; Invalidate(); }
-        protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e);  _pressed = true;  Invalidate(); }
-        protected override void OnMouseUp(MouseEventArgs e)   { base.OnMouseUp(e);    _pressed = false; Invalidate(); }
+        protected override void OnEnabledChanged(EventArgs e)      { base.OnEnabledChanged(e); Invalidate(); }
+        protected override void OnMouseEnter(EventArgs e)          { base.OnMouseEnter(e); _hovered = true;  Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e)          { base.OnMouseLeave(e); _hovered = false; Invalidate(); }
+        protected override void OnMouseDown(MouseEventArgs e)      { base.OnMouseDown(e);  _pressed = true;  Invalidate(); }
+        protected override void OnMouseUp(MouseEventArgs e)        { base.OnMouseUp(e);    _pressed = false; Invalidate(); }
+        protected override void OnPaintBackground(PaintEventArgs e) { } // suppressed — OnPaint handles everything
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            // Fill the whole control area with the parent background first so
+            // anti-aliased rounded corners don't bleed against stale pixels.
+            g.Clear(Parent?.BackColor ?? Color.FromArgb(40, 40, 40));
 
             var r = new Rectangle(1, 1, Width - 3, Height - 3);
 
