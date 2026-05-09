@@ -23,11 +23,24 @@ public class MainForm : Form
     private Point  _panStart;
     private PointF _panOffsetStart;
 
+    private const int HoverRadiusPx  = 14;  // radius used for click-sample area
+    private const int SwatchGripH    = 8;   // height of the drag-to-resize grip strip
+    private const int SwatchMinH     = 80;
+    private const int SwatchMaxH     = 420;
+    private Point     _mouseDownScreenPt;
+    private bool      _isResizingSwatches;
+    private int       _swatchResizeStartScreenY;
+    private int       _swatchResizeStartH;
+
+    private readonly List<List<ColorMatch>> _swatches = [];
+
     private readonly BufferedPanel _imagePanel;
     private readonly BufferedPanel _magPanel;
     private readonly BufferedPanel _resultsPanel;
+    private readonly BufferedPanel _swatchesPanel;
     private readonly NumericUpDown _numColorsSpinner;
     private readonly Button        _analyzeBtn;
+    private readonly Button        _addSwatchBtn;
     private readonly Label         _statusLabel;
 
     public MainForm()
@@ -41,8 +54,10 @@ public class MainForm : Form
         _imagePanel       = new BufferedPanel { Cursor = Cursors.Cross };
         _magPanel         = new BufferedPanel { Cursor = Cursors.Cross };
         _resultsPanel     = new BufferedPanel();
+        _swatchesPanel    = new BufferedPanel();
         _numColorsSpinner = new NumericUpDown();
         _analyzeBtn       = new StyledButton("Analyze Selection", Color.FromArgb(55, 160, 100));
+        _addSwatchBtn     = new StyledButton("Save Color Swatch", Color.FromArgb(130, 80, 160));
         _statusLabel      = new Label();
 
         BuildLayout();
@@ -94,13 +109,17 @@ public class MainForm : Form
         _analyzeBtn.Enabled = false;
         _analyzeBtn.Click  += Analyze_Click;
 
+        _addSwatchBtn.SetBounds(574, 13, 154, 32);
+        _addSwatchBtn.Enabled = false;
+        _addSwatchBtn.Click  += AddSwatch_Click;
+
         _statusLabel.Text      = "Open an image to begin";
         _statusLabel.ForeColor = Color.FromArgb(100, 100, 100);
         _statusLabel.AutoSize  = true;
-        _statusLabel.Location  = new Point(578, 22);
+        _statusLabel.Location  = new Point(742, 22);
 
         toolbar.Controls.AddRange([titleLabel, openBtn, colorsLabel, _numColorsSpinner,
-                                   _analyzeBtn, _statusLabel]);
+                                   _analyzeBtn, _addSwatchBtn, _statusLabel]);
 
         var mainSplit = new SplitContainer
         {
@@ -125,7 +144,11 @@ public class MainForm : Form
 
         mainSplit.Panel2.Controls.Add(rightSplit);
 
+        _swatchesPanel.Dock   = DockStyle.Bottom;
+        _swatchesPanel.Height = 165;
+
         Controls.Add(mainSplit);
+        Controls.Add(_swatchesPanel);
         Controls.Add(toolbar);
     }
 
@@ -144,9 +167,17 @@ public class MainForm : Form
         _magPanel.MouseUp   += MagPanel_MouseUp;
         _resultsPanel.Paint += ResultsPanel_Paint;
 
-        _imagePanel.Resize   += (_, _) => _imagePanel.Invalidate();
-        _magPanel.Resize     += (_, _) => _magPanel.Invalidate();
-        _resultsPanel.Resize += (_, _) => _resultsPanel.Invalidate();
+        _swatchesPanel.Paint      += SwatchesPanel_Paint;
+        _swatchesPanel.MouseDown  += SwatchesPanel_MouseDown;
+        _swatchesPanel.MouseMove  += SwatchesPanel_MouseMove;
+        _swatchesPanel.MouseUp    += (_, _) => { _isResizingSwatches = false; _swatchesPanel.Cursor = Cursors.Default; };
+        _swatchesPanel.MouseLeave += (_, _) => { if (!_isResizingSwatches) _swatchesPanel.Cursor = Cursors.Default; };
+        _swatchesPanel.MouseClick += SwatchesPanel_MouseClick;
+
+        _imagePanel.Resize    += (_, _) => _imagePanel.Invalidate();
+        _magPanel.Resize      += (_, _) => _magPanel.Invalidate();
+        _resultsPanel.Resize  += (_, _) => _resultsPanel.Invalidate();
+        _swatchesPanel.Resize += (_, _) => _swatchesPanel.Invalidate();
     }
 
     // ── Paint ────────────────────────────────────────────────────────────────
@@ -175,6 +206,7 @@ public class MainForm : Form
             using var pen = new Pen(Color.FromArgb(220, 255, 255, 255), 1.5f) { DashStyle = DashStyle.Dash };
             g.DrawRectangle(pen, screenSel);
         }
+
 
         // zoom level badge
         if (_zoom > 1.01f)
@@ -360,10 +392,11 @@ public class MainForm : Form
         }
 
         if (e.Button != MouseButtons.Left) return;
-        _dragStartImage  = ScreenToImagePoint(e.Location);
-        _isDragging      = true;
-        _imageSelection  = Rectangle.Empty;
-        _magSubSelection = Rectangle.Empty;
+        _mouseDownScreenPt = e.Location;
+        _dragStartImage    = ScreenToImagePoint(e.Location);
+        _isDragging        = true;
+        _imageSelection    = Rectangle.Empty;
+        _magSubSelection   = Rectangle.Empty;
         _matches.Clear();
         _resultsPanel.Invalidate();
     }
@@ -381,11 +414,15 @@ public class MainForm : Form
             return;
         }
 
-        if (!_isDragging) return;
-        var cur = ScreenToImagePoint(e.Location);
-        _imageSelection = NormalizeRect(_dragStartImage, cur);
-        _imagePanel.Invalidate();
-        _magPanel.Invalidate();
+        if (_isDragging)
+        {
+            var cur = ScreenToImagePoint(e.Location);
+            _imageSelection = NormalizeRect(_dragStartImage, cur);
+            _imagePanel.Invalidate();
+            _magPanel.Invalidate();
+            return;
+        }
+
     }
 
     private void ImagePanel_MouseUp(object? sender, MouseEventArgs e)
@@ -399,6 +436,24 @@ public class MainForm : Form
 
         if (!_isDragging) return;
         _isDragging = false;
+
+        // detect click: mouse barely moved from the down point
+        int dx = e.X - _mouseDownScreenPt.X;
+        int dy = e.Y - _mouseDownScreenPt.Y;
+        bool isClick = dx * dx + dy * dy < 25; // within 5px radius
+
+        if (isClick)
+        {
+            // build a circle-shaped selection in image coords and analyze immediately
+            _imageSelection  = CircleSelectionAtScreen(_mouseDownScreenPt);
+            _magSubSelection = Rectangle.Empty;
+            _imagePanel.Invalidate();
+            _magPanel.Invalidate();
+            _analyzeBtn.Enabled = !_imageSelection.IsEmpty;
+            if (!_imageSelection.IsEmpty)
+                RunAnalysis(_imageSelection);
+            return;
+        }
 
         bool valid = _imageSelection.Width > 1 && _imageSelection.Height > 1;
         _analyzeBtn.Enabled = valid;
@@ -437,7 +492,7 @@ public class MainForm : Form
         _panOffset      = PointF.Empty;
         _matches.Clear();
         _analyzeBtn.Enabled = false;
-        _statusLabel.Text   = "Scroll to zoom  ·  Middle-drag to pan  ·  Left-drag to select";
+        _statusLabel.Text   = "Click to sample  ·  Drag to select area  ·  Scroll to zoom  ·  Middle-drag to pan";
 
         _imagePanel.Invalidate();
         _magPanel.Invalidate();
@@ -480,7 +535,8 @@ public class MainForm : Form
         }
         finally
         {
-            _analyzeBtn.Enabled = !_imageSelection.IsEmpty;
+            _analyzeBtn.Enabled  = !_imageSelection.IsEmpty;
+            _addSwatchBtn.Enabled = _matches.Count > 0 && _swatches.Count < 5;
             Cursor = Cursors.Default;
         }
     }
@@ -517,6 +573,173 @@ public class MainForm : Form
             _magSubSelection = Rectangle.Empty;
         }
         _magPanel.Invalidate();
+    }
+
+    // ── Swatches ─────────────────────────────────────────────────────────────
+
+    private void AddSwatch_Click(object? sender, EventArgs e)
+    {
+        if (_matches.Count == 0 || _swatches.Count >= 5) return;
+        _swatches.Add([.. _matches]);
+        _addSwatchBtn.Enabled = _swatches.Count < 5;
+        _swatchesPanel.Invalidate();
+    }
+
+    private void SwatchesPanel_Paint(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode     = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+        g.Clear(Color.FromArgb(14, 14, 14));
+
+        // drag-to-resize grip strip
+        g.FillRectangle(new SolidBrush(Color.FromArgb(22, 22, 22)), 0, 0, _swatchesPanel.Width, SwatchGripH);
+        int dotCx = _swatchesPanel.Width / 2;
+        using var dotBrush = new SolidBrush(Color.FromArgb(68, 68, 68));
+        for (int d = -2; d <= 2; d++)
+            g.FillEllipse(dotBrush, dotCx + d * 7 - 1, SwatchGripH / 2 - 1, 3, 3);
+
+        using var titleFont = new Font("Segoe UI", 8f, FontStyle.Bold);
+        g.DrawString("Color Swatches", titleFont, new SolidBrush(Color.FromArgb(85, 85, 85)), 12, SwatchGripH + 4);
+
+        if (_swatches.Count == 0)
+        {
+            using var hint = new Font("Segoe UI", 9f, FontStyle.Italic);
+            g.DrawString("Analyze a color and click 'Save Color Swatch' — up to 5 swatches",
+                hint, new SolidBrush(Color.FromArgb(50, 50, 50)),
+                12, _swatchesPanel.Height / 2f - 8);
+            return;
+        }
+
+        int outerMargin = 10;
+        int gap         = 8;
+        int totalW      = _swatchesPanel.Width - outerMargin * 2;
+        int cardW       = (totalW - gap * 4) / 5;
+        int cardTop     = SwatchGripH + 20;
+        int cardH       = _swatchesPanel.Height - cardTop - 8;
+        int colorBlockH = (int)(cardH * 0.52f);
+
+        using var nameFont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+        using var pctFont  = new Font("Segoe UI", 7.5f);
+
+        for (int i = 0; i < _swatches.Count; i++)
+        {
+            var matches = _swatches[i];
+            int cx = outerMargin + i * (cardW + gap);
+
+            var cardRect = new Rectangle(cx, cardTop, cardW, cardH);
+            using var cardPath = RoundedRect(cardRect, 7);
+            using (var bg = new SolidBrush(Color.FromArgb(26, 26, 26)))
+                g.FillPath(bg, cardPath);
+            using (var border = new Pen(Color.FromArgb(44, 44, 44), 1f))
+                g.DrawPath(border, cardPath);
+
+            // proportional color stripes clipped to top of card
+            var colorRect = new Rectangle(cx + 1, cardTop + 1, cardW - 2, colorBlockH);
+            g.SetClip(colorRect);
+            int bx = colorRect.X;
+            foreach (var m in matches)
+            {
+                int bw = Math.Max(1, (int)(colorRect.Width * m.Percentage / 100.0));
+                using var fill = new SolidBrush(m.DisplayColor);
+                g.FillRectangle(fill, bx, colorRect.Y, bw, colorRect.Height);
+                bx += bw;
+            }
+            g.ResetClip();
+
+            // divider between color block and text area
+            g.FillRectangle(new SolidBrush(Color.FromArgb(44, 44, 44)),
+                cx + 1, cardTop + colorBlockH, cardW - 2, 1);
+
+            // pigment list
+            int textY  = cardTop + colorBlockH + 7;
+            int textX  = cx + 8;
+            int maxTextW = cardW - 22;
+            using var dotFont = new Font("Segoe UI", 6f);
+            foreach (var m in matches)
+            {
+                if (textY + 16 > cardTop + cardH - 4) break;
+                // color dot
+                using var dot = new SolidBrush(m.DisplayColor);
+                g.FillEllipse(dot, textX, textY + 3, 8, 8);
+                using var dotBorder = new Pen(Color.FromArgb(60, 255, 255, 255), 0.5f);
+                g.DrawEllipse(dotBorder, textX, textY + 3, 8, 8);
+
+                // name
+                using var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter };
+                float nameMaxW = maxTextW - 34;
+                g.DrawString(m.Pigment.Name, nameFont,
+                    new SolidBrush(Color.FromArgb(200, 200, 200)),
+                    new RectangleF(textX + 12, textY, nameMaxW, 15), sf);
+
+                // percentage right-aligned in card
+                var pctStr  = $"{m.Percentage}%";
+                var pctSz   = g.MeasureString(pctStr, pctFont);
+                g.DrawString(pctStr, pctFont,
+                    new SolidBrush(Color.FromArgb(210, 175, 70)),
+                    cx + cardW - pctSz.Width - 6, textY);
+
+                textY += 17;
+            }
+
+            // × remove button (top-right corner)
+            int xr = cx + cardW - 20;
+            int yr = cardTop + 5;
+            using var xbg = new SolidBrush(Color.FromArgb(55, 55, 55));
+            g.FillEllipse(xbg, xr, yr, 14, 14);
+            using var xfont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+            using var xsf   = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            g.DrawString("×", xfont, new SolidBrush(Color.FromArgb(180, 180, 180)),
+                new RectangleF(xr, yr, 14, 14), xsf);
+        }
+    }
+
+    private void SwatchesPanel_MouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left && e.Y < SwatchGripH + 2)
+        {
+            _isResizingSwatches          = true;
+            _swatchResizeStartScreenY    = Cursor.Position.Y;
+            _swatchResizeStartH          = _swatchesPanel.Height;
+        }
+    }
+
+    private void SwatchesPanel_MouseMove(object? sender, MouseEventArgs e)
+    {
+        if (_isResizingSwatches)
+        {
+            // drag up = larger panel (panel is docked bottom, grows upward)
+            int delta = _swatchResizeStartScreenY - Cursor.Position.Y;
+            _swatchesPanel.Height = Math.Clamp(_swatchResizeStartH + delta, SwatchMinH, SwatchMaxH);
+            return;
+        }
+        _swatchesPanel.Cursor = e.Y < SwatchGripH + 2 ? Cursors.SizeNS : Cursors.Default;
+    }
+
+    private void SwatchesPanel_MouseClick(object? sender, MouseEventArgs e)
+    {
+        if (e.Y < SwatchGripH + 2) return; // ignore clicks on the grip strip
+
+        int outerMargin = 10;
+        int gap         = 8;
+        int totalW      = _swatchesPanel.Width - outerMargin * 2;
+        int cardW       = (totalW - gap * 4) / 5;
+        int cardTop     = SwatchGripH + 20;
+
+        for (int i = 0; i < _swatches.Count; i++)
+        {
+            int cx   = outerMargin + i * (cardW + gap);
+            int xr   = cx + cardW - 20;
+            int yr   = cardTop + 5;
+            var xBtn = new Rectangle(xr - 2, yr - 2, 18, 18); // slightly enlarged hit area
+            if (xBtn.Contains(e.Location))
+            {
+                _swatches.RemoveAt(i);
+                _addSwatchBtn.Enabled = _swatches.Count < 5 && _matches.Count > 0;
+                _swatchesPanel.Invalidate();
+                return;
+            }
+        }
     }
 
     // ── Geometry helpers ─────────────────────────────────────────────────────
@@ -611,6 +834,28 @@ public class MainForm : Form
             (int)((img.Top    - _imageSelection.Y) * sy),
             (int)((img.Right  - _imageSelection.X) * sx),
             (int)((img.Bottom - _imageSelection.Y) * sy));
+    }
+
+    // Builds an image-space rectangle corresponding to the screen-space hover circle.
+    private Rectangle CircleSelectionAtScreen(Point screenPt)
+    {
+        if (_image == null) return Rectangle.Empty;
+        var dr = ZoomedDrawRect();
+        if (dr.Width <= 0 || dr.Height <= 0) return Rectangle.Empty;
+
+        float scaleX  = _image.Width  / dr.Width;
+        float scaleY  = _image.Height / dr.Height;
+        // keep center as float to avoid truncation-induced offset
+        float centerX = (screenPt.X - dr.X) * scaleX;
+        float centerY = (screenPt.Y - dr.Y) * scaleY;
+        float radX    = Math.Max(1f, HoverRadiusPx * scaleX);
+        float radY    = Math.Max(1f, HoverRadiusPx * scaleY);
+
+        return Rectangle.FromLTRB(
+            Math.Max(0,            (int)Math.Round(centerX - radX)),
+            Math.Max(0,            (int)Math.Round(centerY - radY)),
+            Math.Min(_image.Width,  (int)Math.Round(centerX + radX)),
+            Math.Min(_image.Height, (int)Math.Round(centerY + radY)));
     }
 
     private static Rectangle NormalizeRect(Point a, Point b) =>
