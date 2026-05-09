@@ -34,6 +34,8 @@ public class MainForm : Form
 
     private readonly List<List<ColorMatch>> _swatches = [];
 
+    private Panel _toolbar = null!;
+
     private readonly BufferedPanel _imagePanel;
     private readonly BufferedPanel _magPanel;
     private readonly BufferedPanel _resultsPanel;
@@ -48,7 +50,7 @@ public class MainForm : Form
         Text        = "Color Finder for Artists";
         Size        = new Size(1180, 760);
         MinimumSize = new Size(860, 600);
-        BackColor   = Color.FromArgb(10, 10, 10);
+        BackColor   = Color.FromArgb(9, 10, 16);
         Icon        = SystemIcons.Application;
 
         _imagePanel       = new BufferedPanel { Cursor = Cursors.Cross };
@@ -56,8 +58,8 @@ public class MainForm : Form
         _resultsPanel     = new BufferedPanel();
         _swatchesPanel    = new BufferedPanel();
         _numColorsSpinner = new NumericUpDown();
-        _analyzeBtn       = new StyledButton("Analyze Selection", Color.FromArgb(55, 160, 100));
-        _addSwatchBtn     = new StyledButton("Save Color Swatch", Color.FromArgb(130, 80, 160));
+        _analyzeBtn       = new StyledButton("Analyze Selection", Color.FromArgb(42, 185, 105));
+        _addSwatchBtn     = new StyledButton("Save Color Swatch", Color.FromArgb(112, 82, 222));
         _statusLabel      = new Label();
 
         BuildLayout();
@@ -68,31 +70,35 @@ public class MainForm : Form
 
     private void BuildLayout()
     {
-        var toolbar = new Panel
+        _toolbar = new Panel
         {
             Dock      = DockStyle.Top,
             Height    = 58,
-            BackColor = Color.FromArgb(18, 18, 18),
+            BackColor = Color.FromArgb(13, 15, 23),
             Padding   = new Padding(0),
         };
+        var toolbar = _toolbar;
+        // purple accent line at bottom of toolbar
+        var toolbarAccent = new Panel { Dock = DockStyle.Bottom, Height = 2, BackColor = Color.FromArgb(102, 78, 210) };
+        toolbar.Controls.Add(toolbarAccent);
 
         var titleLabel = new Label
         {
             Text      = "Color Finder",
-            ForeColor = Color.White,
+            ForeColor = Color.FromArgb(218, 222, 240),
             Font      = new Font("Segoe UI", 11f, FontStyle.Bold),
             AutoSize  = true,
-            Location  = new Point(14, 19),
+            Location  = new Point(14, 18),
         };
 
-        var openBtn = new StyledButton("Open Image", Color.FromArgb(45, 110, 175));
-        openBtn.SetBounds(152, 13, 130, 32);
+        var openBtn = new StyledButton("Open Image", Color.FromArgb(55, 108, 210));
+        openBtn.SetBounds(145, 6, 144, 46);
         openBtn.Click += OpenImage_Click;
 
         var colorsLabel = new Label
         {
             Text      = "Colors:",
-            ForeColor = Color.FromArgb(150, 150, 150),
+            ForeColor = Color.FromArgb(88, 97, 128),
             AutoSize  = true,
             Location  = new Point(296, 22),
         };
@@ -101,22 +107,22 @@ public class MainForm : Form
         _numColorsSpinner.Minimum     = 2;
         _numColorsSpinner.Maximum     = 6;
         _numColorsSpinner.Value       = 3;
-        _numColorsSpinner.BackColor   = Color.FromArgb(34, 34, 34);
-        _numColorsSpinner.ForeColor   = Color.White;
+        _numColorsSpinner.BackColor   = Color.FromArgb(22, 25, 38);
+        _numColorsSpinner.ForeColor   = Color.FromArgb(210, 215, 235);
         _numColorsSpinner.BorderStyle = BorderStyle.FixedSingle;
 
-        _analyzeBtn.SetBounds(410, 13, 154, 32);
+        _analyzeBtn.SetBounds(403, 6, 168, 46);
         _analyzeBtn.Enabled = false;
         _analyzeBtn.Click  += Analyze_Click;
 
-        _addSwatchBtn.SetBounds(574, 13, 154, 32);
+        _addSwatchBtn.SetBounds(581, 6, 168, 46);
         _addSwatchBtn.Enabled = false;
         _addSwatchBtn.Click  += AddSwatch_Click;
 
         _statusLabel.Text      = "Open an image to begin";
-        _statusLabel.ForeColor = Color.FromArgb(100, 100, 100);
+        _statusLabel.ForeColor = Color.FromArgb(75, 85, 115);
         _statusLabel.AutoSize  = true;
-        _statusLabel.Location  = new Point(742, 22);
+        _statusLabel.Location  = new Point(742, 21);
 
         toolbar.Controls.AddRange([titleLabel, openBtn, colorsLabel, _numColorsSpinner,
                                    _analyzeBtn, _addSwatchBtn, _statusLabel]);
@@ -125,7 +131,7 @@ public class MainForm : Form
         {
             Dock             = DockStyle.Fill,
             SplitterDistance = 740,
-            BackColor        = Color.FromArgb(10, 10, 10),
+            BackColor        = Color.FromArgb(9, 10, 16),
         };
         mainSplit.Panel1.Controls.Add(_imagePanel);
         _imagePanel.Dock = DockStyle.Fill;
@@ -135,7 +141,7 @@ public class MainForm : Form
             Dock             = DockStyle.Fill,
             Orientation      = Orientation.Horizontal,
             SplitterDistance = 300,
-            BackColor        = Color.FromArgb(10, 10, 10),
+            BackColor        = Color.FromArgb(9, 10, 16),
         };
         rightSplit.Panel1.Controls.Add(_magPanel);
         _magPanel.Dock = DockStyle.Fill;
@@ -187,7 +193,7 @@ public class MainForm : Form
         var g = e.Graphics;
         g.SmoothingMode     = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-        g.Clear(Color.FromArgb(12, 12, 12));
+        g.Clear(Color.FromArgb(9, 10, 16));
 
         if (_image == null)
         {
@@ -201,26 +207,32 @@ public class MainForm : Form
         if (!_imageSelection.IsEmpty)
         {
             var screenSel = ImageToScreen(_imageSelection);
-            using var overlay = new SolidBrush(Color.FromArgb(50, 255, 255, 255));
+            using var overlay = new SolidBrush(Color.FromArgb(38, 102, 78, 210));
             g.FillRectangle(overlay, screenSel);
-            using var pen = new Pen(Color.FromArgb(220, 255, 255, 255), 1.5f) { DashStyle = DashStyle.Dash };
+            using var pen = new Pen(Color.FromArgb(200, 102, 78, 210), 1.5f);
             g.DrawRectangle(pen, screenSel);
+            // inner glow line
+            var inner = screenSel;
+            inner.Inflate(-1, -1);
+            using var innerPen = new Pen(Color.FromArgb(60, 180, 160, 255), 1f);
+            g.DrawRectangle(innerPen, inner);
         }
 
-
-        // zoom level badge
+        // zoom badge
         if (_zoom > 1.01f)
         {
             var label = $"{_zoom:F1}×";
             using var f  = new Font("Segoe UI", 9f, FontStyle.Bold);
             var       sz = g.MeasureString(label, f);
-            float     tx = _imagePanel.Width  - sz.Width  - 14;
-            float     ty = 10;
-            var badgeR = new Rectangle((int)(tx - 7), (int)(ty - 5), (int)(sz.Width + 14), (int)(sz.Height + 10));
-            using var bgPath = RoundedRect(badgeR, 5);
-            using (var bg = new SolidBrush(Color.FromArgb(195, 0, 0, 0)))
+            float     tx = _imagePanel.Width - sz.Width - 16;
+            float     ty = 12;
+            var badgeR = new Rectangle((int)(tx - 10), (int)(ty - 5), (int)(sz.Width + 20), (int)(sz.Height + 10));
+            using var bgPath = RoundedRect(badgeR, 10);
+            using (var bg = new SolidBrush(Color.FromArgb(210, 13, 15, 23)))
                 g.FillPath(bg, bgPath);
-            g.DrawString(label, f, Brushes.White, tx, ty);
+            using (var border = new Pen(Color.FromArgb(80, 102, 78, 210), 1f))
+                g.DrawPath(border, bgPath);
+            g.DrawString(label, f, new SolidBrush(Color.FromArgb(200, 210, 235)), tx, ty);
         }
     }
 
@@ -229,7 +241,7 @@ public class MainForm : Form
         var g = e.Graphics;
         g.SmoothingMode     = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-        g.Clear(Color.FromArgb(12, 12, 12));
+        g.Clear(Color.FromArgb(9, 10, 16));
 
         if (_image == null || _imageSelection.IsEmpty)
         {
@@ -244,21 +256,35 @@ public class MainForm : Form
             new Rectangle(0, 0, _magPanel.Width, _magPanel.Height),
             _imageSelection, GraphicsUnit.Pixel);
 
-        // sub-selection overlay drawn while dragging in mag panel
         if (!_magSubSelection.IsEmpty)
         {
             var magRect = ImageToMag(_magSubSelection);
-            using var overlay = new SolidBrush(Color.FromArgb(45, 255, 255, 255));
+            using var overlay = new SolidBrush(Color.FromArgb(38, 102, 78, 210));
             g.FillRectangle(overlay, magRect);
-            using var selPen = new Pen(Color.White, 1.5f) { DashStyle = DashStyle.Dash };
+            using var selPen = new Pen(Color.FromArgb(200, 102, 78, 210), 1.5f);
             g.DrawRectangle(selPen, magRect);
         }
 
-        using var hdr = new SolidBrush(Color.FromArgb(210, 12, 12, 12));
-        g.FillRectangle(hdr, 0, 0, _magPanel.Width, 24);
-        using var hdrFont = new Font("Segoe UI", 8f);
-        g.DrawString($"Magnified  ·  {_imageSelection.Width}×{_imageSelection.Height} px  ·  drag to refine",
-            hdrFont, new SolidBrush(Color.FromArgb(125, 125, 125)), 8, 5);
+        // header bar
+        using var hdrBg = new SolidBrush(Color.FromArgb(218, 11, 13, 20));
+        g.FillRectangle(hdrBg, 0, 0, _magPanel.Width, 26);
+        using var hdrBorder = new SolidBrush(Color.FromArgb(32, 37, 56));
+        g.FillRectangle(hdrBorder, 0, 26, _magPanel.Width, 1);
+
+        // pill badge + info text
+        using var hdrFont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+        var pillLabel = "MAGNIFIED";
+        var pillSz    = g.MeasureString(pillLabel, hdrFont);
+        var pillRect  = new Rectangle(8, 6, (int)pillSz.Width + 10, 14);
+        using var pillPath = RoundedRect(pillRect, 4);
+        using (var pillBg = new SolidBrush(Color.FromArgb(50, 102, 78, 210)))
+            g.FillPath(pillBg, pillPath);
+        g.DrawString(pillLabel, hdrFont, new SolidBrush(Color.FromArgb(140, 128, 230)), 13, 7);
+
+        using var infoFont = new Font("Segoe UI", 7.5f);
+        g.DrawString($"{_imageSelection.Width} × {_imageSelection.Height} px  ·  drag to refine",
+            infoFont, new SolidBrush(Color.FromArgb(72, 82, 110)),
+            pillRect.Right + 8, 7);
     }
 
     private void ResultsPanel_Paint(object? sender, PaintEventArgs e)
@@ -266,84 +292,104 @@ public class MainForm : Form
         var g = e.Graphics;
         g.SmoothingMode     = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-        g.Clear(Color.FromArgb(18, 18, 18));
+        g.Clear(Color.FromArgb(12, 14, 21));
 
-        using var titleFont = new Font("Segoe UI", 10f, FontStyle.Bold);
-        g.DrawString("Color Recipe", titleFont, Brushes.White, 14, 12);
-        // green accent line under title
-        g.FillRectangle(new SolidBrush(Color.FromArgb(55, 160, 100)), 14, 32, 58, 2);
+        // title
+        using var titleFont = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+        g.DrawString("Color Recipe", titleFont, new SolidBrush(Color.FromArgb(218, 222, 240)), 14, 13);
+        // gradient accent line
+        using var accentBrush = new LinearGradientBrush(
+            new Point(14, 34), new Point(90, 34),
+            Color.FromArgb(102, 78, 210), Color.FromArgb(0, 102, 78, 210));
+        g.FillRectangle(accentBrush, 14, 34, 76, 2);
 
         if (_matches.Count == 0)
         {
             using var hint = new Font("Segoe UI", 9f, FontStyle.Italic);
             g.DrawString("Select an area to get the color recipe", hint,
-                new SolidBrush(Color.FromArgb(56, 56, 56)), 14, 46);
+                new SolidBrush(Color.FromArgb(42, 50, 72)), 14, 50);
             return;
         }
 
-        int y      = 44;
+        int y      = 46;
         int margin = 10;
         int cardW  = _resultsPanel.Width - margin * 2;
 
         using var nameFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-        using var catFont  = new Font("Segoe UI", 8f);
-        using var pctFont  = new Font("Segoe UI", 11f, FontStyle.Bold);
+        using var catFont  = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+        using var pctFont  = new Font("Segoe UI", 12f, FontStyle.Bold);
 
         foreach (var m in _matches)
         {
-            const int cardH = 52;
+            const int cardH = 60;
             if (y + cardH + 6 > _resultsPanel.Height - 22) break;
 
-            // card
+            // card background
             var cardRect = new Rectangle(margin, y, cardW, cardH);
-            using var cardPath = RoundedRect(cardRect, 6);
-            using (var cardBrush = new SolidBrush(Color.FromArgb(28, 28, 28)))
+            using var cardPath = RoundedRect(cardRect, 9);
+            using (var cardBrush = new SolidBrush(Color.FromArgb(20, 23, 36)))
                 g.FillPath(cardBrush, cardPath);
-            using (var borderPen = new Pen(Color.FromArgb(42, 42, 42), 1f))
+            using (var borderPen = new Pen(Color.FromArgb(32, 37, 56), 1f))
                 g.DrawPath(borderPen, cardPath);
+            // subtle top highlight on card
+            using var highlightPen = new Pen(Color.FromArgb(28, 180, 160, 255), 1f);
+            g.DrawLine(highlightPen, cardRect.X + 10, cardRect.Y + 1, cardRect.Right - 10, cardRect.Y + 1);
 
             // swatch
-            int swatchSize = 34;
+            const int swatchSize = 40;
             int sx = margin + 10;
             int sy = y + (cardH - swatchSize) / 2;
-            using var swatchPath = RoundedRect(new Rectangle(sx, sy, swatchSize, swatchSize), 5);
+            using var swatchPath = RoundedRect(new Rectangle(sx, sy, swatchSize, swatchSize), 8);
             using (var swatchBrush = new SolidBrush(m.DisplayColor))
                 g.FillPath(swatchBrush, swatchPath);
-            using (var swatchBorder = new Pen(Color.FromArgb(55, 255, 255, 255), 1f))
+            using (var swatchBorder = new Pen(Color.FromArgb(45, 255, 255, 255), 1f))
                 g.DrawPath(swatchBorder, swatchPath);
 
-            // calculate percentage position first so name can be clipped to it
-            int textX = sx + swatchSize + 10;
+            // percentage (right-aligned, computed first for clipping)
+            int textX   = sx + swatchSize + 12;
             var pctStr  = $"{m.Percentage}%";
             var pctSize = g.MeasureString(pctStr, pctFont);
-            float pctX  = margin + cardW - pctSize.Width - 12;
+            float pctX  = margin + cardW - pctSize.Width - 10;
             float pctY  = y + (cardH - pctSize.Height) / 2f;
+            g.DrawString(pctStr, pctFont, new SolidBrush(Color.FromArgb(232, 178, 58)), pctX, pctY);
 
-            // name clipped so it never overlaps the percentage
+            // name
             float nameMaxW = Math.Max(20f, pctX - textX - 6);
             using var nameSf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter };
-            g.DrawString(m.Pigment.Name, nameFont, Brushes.White,
-                new RectangleF(textX, y + 7, nameMaxW, 20), nameSf);
-            g.DrawString(m.Pigment.Category, catFont,
-                new SolidBrush(Color.FromArgb(90, 90, 90)), textX, y + 27);
+            g.DrawString(m.Pigment.Name, nameFont, new SolidBrush(Color.FromArgb(218, 222, 240)),
+                new RectangleF(textX, y + 8, nameMaxW, 20), nameSf);
 
-            g.DrawString(pctStr, pctFont,
-                new SolidBrush(Color.FromArgb(215, 180, 75)), pctX, pctY);
+            // category pill
+            var catStr  = m.Pigment.Category;
+            var catSz   = g.MeasureString(catStr, catFont);
+            var pillRect = new Rectangle(textX, y + 30, (int)catSz.Width + 10, 16);
+            using var pillPath = RoundedRect(pillRect, 4);
+            using (var pillBg = new SolidBrush(Color.FromArgb(30, 40, 65)))
+                g.FillPath(pillBg, pillPath);
+            g.DrawString(catStr, catFont, new SolidBrush(Color.FromArgb(90, 102, 145)),
+                pillRect.X + 5, pillRect.Y + 2);
 
-            // thin progress bar
+            // gradient progress bar
             int barX    = textX;
-            int barY    = y + cardH - 9;
-            int barMaxW = Math.Max(10, (int)(pctX - textX - 8));
+            int barY    = y + cardH - 7;
+            int barMaxW = Math.Max(10, (int)(pctX - textX - 10));
             int barW    = Math.Max(0, (int)(barMaxW * m.Percentage / 100.0));
-            g.FillRectangle(new SolidBrush(Color.FromArgb(38, 38, 38)), barX, barY, barMaxW, 3);
-            g.FillRectangle(new SolidBrush(Color.FromArgb(160, m.DisplayColor)), barX, barY, barW, 3);
+            g.FillRectangle(new SolidBrush(Color.FromArgb(22, 26, 40)), barX, barY, barMaxW, 4);
+            if (barW > 0)
+            {
+                using var barGrad = new LinearGradientBrush(
+                    new Rectangle(barX, barY, Math.Max(1, barW), 4),
+                    Color.FromArgb(200, m.DisplayColor), Color.FromArgb(120, m.DisplayColor),
+                    LinearGradientMode.Horizontal);
+                g.FillRectangle(barGrad, barX, barY, barW, 4);
+            }
 
             y += cardH + 6;
         }
 
         using var footFont = new Font("Segoe UI", 7.5f, FontStyle.Italic);
         g.DrawString("Mix these pigments in the percentages shown",
-            footFont, new SolidBrush(Color.FromArgb(48, 48, 48)),
+            footFont, new SolidBrush(Color.FromArgb(38, 45, 65)),
             14, _resultsPanel.Height - 18);
     }
 
@@ -590,37 +636,49 @@ public class MainForm : Form
         var g = e.Graphics;
         g.SmoothingMode     = SmoothingMode.AntiAlias;
         g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-        g.Clear(Color.FromArgb(14, 14, 14));
+        g.Clear(Color.FromArgb(11, 13, 20));
 
-        // drag-to-resize grip strip
-        g.FillRectangle(new SolidBrush(Color.FromArgb(22, 22, 22)), 0, 0, _swatchesPanel.Width, SwatchGripH);
+        // drag grip strip
+        g.FillRectangle(new SolidBrush(Color.FromArgb(16, 18, 28)), 0, 0, _swatchesPanel.Width, SwatchGripH);
+        g.FillRectangle(new SolidBrush(Color.FromArgb(28, 33, 52)), 0, SwatchGripH, _swatchesPanel.Width, 1);
         int dotCx = _swatchesPanel.Width / 2;
-        using var dotBrush = new SolidBrush(Color.FromArgb(68, 68, 68));
+        using var dotBrush = new SolidBrush(Color.FromArgb(55, 62, 92));
         for (int d = -2; d <= 2; d++)
             g.FillEllipse(dotBrush, dotCx + d * 7 - 1, SwatchGripH / 2 - 1, 3, 3);
 
         using var titleFont = new Font("Segoe UI", 8f, FontStyle.Bold);
-        g.DrawString("Color Swatches", titleFont, new SolidBrush(Color.FromArgb(85, 85, 85)), 12, SwatchGripH + 4);
+        g.DrawString("Color Swatches", titleFont, new SolidBrush(Color.FromArgb(78, 88, 122)), 14, SwatchGripH + 5);
+        if (_swatches.Count > 0)
+        {
+            using var cntFont = new Font("Segoe UI", 7f, FontStyle.Bold);
+            var cntStr = $"{_swatches.Count}/5";
+            var cntSz  = g.MeasureString(cntStr, cntFont);
+            var cntR   = new Rectangle(96, SwatchGripH + 5, (int)cntSz.Width + 8, 14);
+            using var cntPath = RoundedRect(cntR, 4);
+            using (var cntBg = new SolidBrush(Color.FromArgb(35, 102, 78, 210)))
+                g.FillPath(cntBg, cntPath);
+            g.DrawString(cntStr, cntFont, new SolidBrush(Color.FromArgb(120, 105, 215)), cntR.X + 4, cntR.Y + 2);
+        }
 
         if (_swatches.Count == 0)
         {
             using var hint = new Font("Segoe UI", 9f, FontStyle.Italic);
             g.DrawString("Analyze a color and click 'Save Color Swatch' — up to 5 swatches",
-                hint, new SolidBrush(Color.FromArgb(50, 50, 50)),
-                12, _swatchesPanel.Height / 2f - 8);
+                hint, new SolidBrush(Color.FromArgb(38, 45, 65)),
+                14, _swatchesPanel.Height / 2f - 6);
             return;
         }
 
-        int outerMargin = 10;
-        int gap         = 8;
+        int outerMargin = 12;
+        int gap         = 10;
         int totalW      = _swatchesPanel.Width - outerMargin * 2;
         int cardW       = (totalW - gap * 4) / 5;
-        int cardTop     = SwatchGripH + 20;
-        int cardH       = _swatchesPanel.Height - cardTop - 8;
-        int colorBlockH = (int)(cardH * 0.52f);
+        int cardTop     = SwatchGripH + 22;
+        int cardH       = _swatchesPanel.Height - cardTop - 10;
+        int colorBlockH = (int)(cardH * 0.50f);
 
         using var nameFont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
-        using var pctFont  = new Font("Segoe UI", 7.5f);
+        using var pctFont  = new Font("Segoe UI", 7.5f, FontStyle.Bold);
 
         for (int i = 0; i < _swatches.Count; i++)
         {
@@ -628,68 +686,73 @@ public class MainForm : Form
             int cx = outerMargin + i * (cardW + gap);
 
             var cardRect = new Rectangle(cx, cardTop, cardW, cardH);
-            using var cardPath = RoundedRect(cardRect, 7);
-            using (var bg = new SolidBrush(Color.FromArgb(26, 26, 26)))
+            using var cardPath = RoundedRect(cardRect, 9);
+            using (var bg = new SolidBrush(Color.FromArgb(20, 23, 36)))
                 g.FillPath(bg, cardPath);
-            using (var border = new Pen(Color.FromArgb(44, 44, 44), 1f))
+            using (var border = new Pen(Color.FromArgb(32, 37, 56), 1f))
                 g.DrawPath(border, cardPath);
+            using var topHL = new Pen(Color.FromArgb(22, 180, 160, 255), 1f);
+            g.DrawLine(topHL, cx + 10, cardTop + 1, cx + cardW - 10, cardTop + 1);
 
-            // proportional color stripes clipped to top of card
-            var colorRect = new Rectangle(cx + 1, cardTop + 1, cardW - 2, colorBlockH);
-            g.SetClip(colorRect);
-            int bx = colorRect.X;
+            // color stripes clipped to rounded top of card
+            g.SetClip(new Rectangle(cx + 1, cardTop + 1, cardW - 2, colorBlockH + 8));
+            g.SetClip(cardPath, System.Drawing.Drawing2D.CombineMode.Intersect);
+            int bx = cx + 1;
             foreach (var m in matches)
             {
-                int bw = Math.Max(1, (int)(colorRect.Width * m.Percentage / 100.0));
+                int bw = Math.Max(1, (int)((cardW - 2) * m.Percentage / 100.0));
                 using var fill = new SolidBrush(m.DisplayColor);
-                g.FillRectangle(fill, bx, colorRect.Y, bw, colorRect.Height);
+                g.FillRectangle(fill, bx, cardTop + 1, bw, colorBlockH);
                 bx += bw;
             }
             g.ResetClip();
 
-            // divider between color block and text area
-            g.FillRectangle(new SolidBrush(Color.FromArgb(44, 44, 44)),
+            // gradient fade at bottom of color block
+            var fadeRect = new Rectangle(cx + 1, cardTop + colorBlockH - 10, cardW - 2, 14);
+            using var fadeBrush = new LinearGradientBrush(fadeRect,
+                Color.FromArgb(0, 20, 23, 36), Color.FromArgb(255, 20, 23, 36),
+                LinearGradientMode.Vertical);
+            g.FillRectangle(fadeBrush, fadeRect);
+
+            g.FillRectangle(new SolidBrush(Color.FromArgb(28, 33, 52)),
                 cx + 1, cardTop + colorBlockH, cardW - 2, 1);
 
             // pigment list
-            int textY  = cardTop + colorBlockH + 7;
-            int textX  = cx + 8;
-            int maxTextW = cardW - 22;
-            using var dotFont = new Font("Segoe UI", 6f);
+            int textY    = cardTop + colorBlockH + 8;
+            int textX    = cx + 8;
+            using var nameSf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter };
             foreach (var m in matches)
             {
                 if (textY + 16 > cardTop + cardH - 4) break;
-                // color dot
                 using var dot = new SolidBrush(m.DisplayColor);
                 g.FillEllipse(dot, textX, textY + 3, 8, 8);
-                using var dotBorder = new Pen(Color.FromArgb(60, 255, 255, 255), 0.5f);
-                g.DrawEllipse(dotBorder, textX, textY + 3, 8, 8);
+                using var dotBdr = new Pen(Color.FromArgb(50, 255, 255, 255), 0.5f);
+                g.DrawEllipse(dotBdr, textX, textY + 3, 8, 8);
 
-                // name
-                using var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter };
-                float nameMaxW = maxTextW - 34;
+                float nameW = cardW - 16 - 36;
                 g.DrawString(m.Pigment.Name, nameFont,
-                    new SolidBrush(Color.FromArgb(200, 200, 200)),
-                    new RectangleF(textX + 12, textY, nameMaxW, 15), sf);
+                    new SolidBrush(Color.FromArgb(185, 192, 215)),
+                    new RectangleF(textX + 12, textY, nameW, 15), nameSf);
 
-                // percentage right-aligned in card
-                var pctStr  = $"{m.Percentage}%";
-                var pctSz   = g.MeasureString(pctStr, pctFont);
+                var pctStr = $"{m.Percentage}%";
+                var pctSz  = g.MeasureString(pctStr, pctFont);
                 g.DrawString(pctStr, pctFont,
-                    new SolidBrush(Color.FromArgb(210, 175, 70)),
-                    cx + cardW - pctSz.Width - 6, textY);
+                    new SolidBrush(Color.FromArgb(232, 178, 58)),
+                    cx + cardW - pctSz.Width - 5, textY);
 
                 textY += 17;
             }
 
-            // × remove button (top-right corner)
+            // × remove button
             int xr = cx + cardW - 20;
-            int yr = cardTop + 5;
-            using var xbg = new SolidBrush(Color.FromArgb(55, 55, 55));
+            int yr = cardTop + 6;
+            using var xbg = new SolidBrush(Color.FromArgb(28, 33, 52));
             g.FillEllipse(xbg, xr, yr, 14, 14);
+            using var xborder = new Pen(Color.FromArgb(42, 50, 75), 1f);
+            g.DrawEllipse(xborder, xr, yr, 14, 14);
             using var xfont = new Font("Segoe UI", 7.5f, FontStyle.Bold);
             using var xsf   = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString("×", xfont, new SolidBrush(Color.FromArgb(180, 180, 180)),
+            g.DrawString("×", xfont, new SolidBrush(Color.FromArgb(95, 108, 150)),
                 new RectangleF(xr, yr, 14, 14), xsf);
         }
     }
@@ -877,7 +940,7 @@ public class MainForm : Form
     {
         using var f  = new Font("Segoe UI", 10f, FontStyle.Italic);
         var       sz = g.MeasureString(text, f);
-        g.DrawString(text, f, new SolidBrush(Color.FromArgb(68, 68, 68)),
+        g.DrawString(text, f, new SolidBrush(Color.FromArgb(42, 50, 72)),
             (ctrl.Width - sz.Width) / 2f, (ctrl.Height - sz.Height) / 2f);
     }
 
@@ -885,6 +948,9 @@ public class MainForm : Form
 
     private sealed class StyledButton : Button
     {
+        // Extra space around pill — glow is drawn here, matching toolbar bg at edges
+        private const int GlowPad = 7;
+
         private readonly Color _base;
         private bool _hovered;
         private bool _pressed;
@@ -901,12 +967,15 @@ public class MainForm : Form
                      ControlStyles.OptimizedDoubleBuffer, true);
         }
 
-        protected override void OnEnabledChanged(EventArgs e)      { base.OnEnabledChanged(e); Invalidate(); }
-        protected override void OnMouseEnter(EventArgs e)          { base.OnMouseEnter(e); _hovered = true;  Invalidate(); }
-        protected override void OnMouseLeave(EventArgs e)          { base.OnMouseLeave(e); _hovered = false; Invalidate(); }
-        protected override void OnMouseDown(MouseEventArgs e)      { base.OnMouseDown(e);  _pressed = true;  Invalidate(); }
-        protected override void OnMouseUp(MouseEventArgs e)        { base.OnMouseUp(e);    _pressed = false; Invalidate(); }
-        protected override void OnPaintBackground(PaintEventArgs e) { } // suppressed — OnPaint handles everything
+        public Color BaseColor => _base;
+        public bool  IsHovered => _hovered;
+
+        protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
+        protected override void OnMouseEnter(EventArgs e)     { base.OnMouseEnter(e); _hovered = true;  Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e)     { base.OnMouseLeave(e); _hovered = false; Invalidate(); }
+        protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e);  _pressed = true;  Invalidate(); }
+        protected override void OnMouseUp(MouseEventArgs e)   { base.OnMouseUp(e);    _pressed = false; Invalidate(); }
+        protected override void OnPaintBackground(PaintEventArgs e) { }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -914,49 +983,70 @@ public class MainForm : Form
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-            // Fill the whole control area with the parent background first so
-            // anti-aliased rounded corners don't bleed against stale pixels.
-            g.Clear(Parent?.BackColor ?? Color.FromArgb(40, 40, 40));
-
-            var r = new Rectangle(1, 1, Width - 3, Height - 3);
-
             Color fill = Enabled ? _base : Desaturate(_base);
-            Color top, bot;
-            if (_pressed)      { top = Darken(fill, 0.18f);  bot = Lighten(fill, 0.06f); }
-            else if (_hovered) { top = Lighten(fill, 0.28f); bot = Lighten(fill, 0.10f); }
-            else               { top = Lighten(fill, 0.20f); bot = Darken(fill, 0.15f);  }
 
-            using var path = RoundedPath(r, 8);
-            using (var grad = new LinearGradientBrush(
-                new Rectangle(0, 0, Width, Height), top, bot, LinearGradientMode.Vertical))
-                g.FillPath(grad, path);
+            // fill entire control with toolbar bg so outer GlowPad margin blends seamlessly
+            g.Clear(Color.FromArgb(13, 15, 23));
 
-            if (Enabled && !_pressed && r.Height > 10)
+            // pill rect sits inside GlowPad margin
+            var r = new Rectangle(GlowPad, GlowPad, Width - GlowPad * 2, Height - GlowPad * 2);
+            using var path = RoundedPath(r, 10);
+
+            // glow rings painted inside GlowPad margin (largest ring at outer edge, brightest near pill)
+            if (Enabled)
             {
-                var shine = new Rectangle(r.X + 2, r.Y + 2, r.Width - 4, r.Height / 2 - 2);
-                if (shine.Width > 4 && shine.Height > 2)
+                Color gc = _hovered ? Lighten(fill, 0.2f) : fill;
+                // inset from 0 → GlowPad: outer edge fades, inner edge is bright
+                int[] insets = { 0, 2, 4, GlowPad - 1 };
+                int[] alphas = _hovered
+                    ? new[] { 18, 42, 80, 120 }
+                    : new[] { 10, 25, 55,  90 };
+
+                for (int i = 0; i < insets.Length; i++)
                 {
-                    using var shineGrad = new LinearGradientBrush(shine,
-                        Color.FromArgb(65, 255, 255, 255),
-                        Color.FromArgb(5,  255, 255, 255),
+                    int ins = insets[i];
+                    var gr  = new Rectangle(ins, ins, Width - ins * 2, Height - ins * 2);
+                    if (gr.Width <= 0 || gr.Height <= 0) continue;
+                    int rad = Math.Max(6, 10 + (GlowPad - ins));
+                    using var gp = RoundedPath(gr, rad);
+                    using var gb = new SolidBrush(Color.FromArgb(alphas[i], gc));
+                    g.FillPath(gb, gp);
+                }
+            }
+
+            // pill face
+            Color face;
+            if      (_pressed) face = Darken(fill,  0.14f);
+            else if (_hovered) face = Lighten(fill, 0.18f);
+            else               face = fill;
+
+            using (var fb = new SolidBrush(face))
+                g.FillPath(fb, path);
+
+            // top-edge shine
+            if (Enabled && !_pressed)
+            {
+                var shine = new Rectangle(r.X + 3, r.Y + 1, r.Width - 6, r.Height / 2);
+                if (shine.Width > 4 && shine.Height > 1)
+                {
+                    using var sg = new LinearGradientBrush(shine,
+                        Color.FromArgb(38, 255, 255, 255), Color.FromArgb(0, 255, 255, 255),
                         LinearGradientMode.Vertical);
                     g.SetClip(path);
-                    g.FillRectangle(shineGrad, shine);
+                    g.FillRectangle(sg, shine);
                     g.ResetClip();
                 }
             }
 
-            using var border = new Pen(Color.FromArgb(90, 0, 0, 0), 1f);
+            // border
+            using var border = new Pen(Color.FromArgb(Enabled ? 50 : 20, 255, 255, 255), 1f);
             g.DrawPath(border, path);
 
-            var textColor = Enabled ? Color.White : Color.FromArgb(120, 120, 120);
+            // text
+            var textColor = Enabled ? Color.FromArgb(238, 240, 255) : Color.FromArgb(55, 65, 95);
             using var tb = new SolidBrush(textColor);
-            using var sf = new StringFormat
-            {
-                Alignment     = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center,
-            };
-            g.DrawString(Text, Font, tb, new RectangleF(0, 0, Width, Height), sf);
+            using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            g.DrawString(Text, Font, tb, new RectangleF(r.X, r.Y, r.Width, r.Height), sf);
         }
 
         private static GraphicsPath RoundedPath(Rectangle r, int rad)
