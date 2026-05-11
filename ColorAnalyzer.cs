@@ -22,6 +22,11 @@ public static class ColorAnalyzer
     private static readonly HashSet<string> NeutralGreyNames =
         ["Neutral Gray Light", "Neutral Gray", "Davy's Gray"];
 
+    // Minimum white fraction before we split a match into White + pigment.
+    // wFrac = (L_centroid - L_pigment) / (L_white - L_pigment)
+    // 0.15 means the centroid is at least 15% of the way from the pure pigment toward white.
+    private const double WhiteDecompThreshold = 0.15;
+
     public static List<ColorMatch> Analyze(Bitmap bmp, Rectangle selection, int numColors)
     {
         var pixels = SamplePixels(bmp, selection, maxSamples: 6000);
@@ -51,7 +56,9 @@ public static class ColorAnalyzer
         for (int k = 0; k < numColors; k++)
         {
             if (counts[k] == 0) continue;
-            var pigment    = NearestPigment(centroids[k]);
+
+            int pidx = NearestPigmentIndex(centroids[k]);
+            var pigment = PigmentDatabase.Pigments[pidx];
             int percentage = (int)Math.Round(counts[k] * 100.0 / total);
             var displayColor = Color.FromArgb(
                 (int)(clusterR[k] / counts[k]),
@@ -62,7 +69,6 @@ public static class ColorAnalyzer
             {
                 double chroma = Math.Sqrt(centroids[k].A * centroids[k].A +
                                           centroids[k].B * centroids[k].B);
-
                 if (chroma < 8.0)
                 {
                     // Truly neutral — decompose into Titanium White + Ivory Black
@@ -73,28 +79,20 @@ public static class ColorAnalyzer
                     int wPct = (int)Math.Round(percentage * wFrac);
                     int bPct = percentage - wPct;
 
-                    var whiteColor = Color.FromArgb(
-                        PigmentDatabase.Pigments[WhiteIdx].R,
-                        PigmentDatabase.Pigments[WhiteIdx].G,
-                        PigmentDatabase.Pigments[WhiteIdx].B);
-                    var blackColor = Color.FromArgb(
-                        PigmentDatabase.Pigments[BlackIdx].R,
-                        PigmentDatabase.Pigments[BlackIdx].G,
-                        PigmentDatabase.Pigments[BlackIdx].B);
-
-                    if (wPct > 0) raw.Add(new ColorMatch(PigmentDatabase.Pigments[WhiteIdx], wPct, whiteColor));
-                    if (bPct > 0) raw.Add(new ColorMatch(PigmentDatabase.Pigments[BlackIdx], bPct, blackColor));
+                    if (wPct > 0) raw.Add(new ColorMatch(PigmentDatabase.Pigments[WhiteIdx], wPct, PigmentColor(WhiteIdx)));
+                    if (bPct > 0) raw.Add(new ColorMatch(PigmentDatabase.Pigments[BlackIdx], bPct, PigmentColor(BlackIdx)));
                 }
                 else
                 {
-                    // Chromatic color that happened to match a grey — find best coloured pigment
-                    pigment = NearestNonGreyPigment(centroids[k]);
-                    raw.Add(new ColorMatch(pigment, percentage, displayColor));
+                    // Chromatic color that happened to match a grey — use best coloured pigment
+                    pidx = NearestNonGreyPigmentIndex(centroids[k]);
+                    pigment = PigmentDatabase.Pigments[pidx];
+                    AddWithWhiteDecomp(raw, centroids[k], pidx, pigment, percentage, displayColor);
                 }
             }
             else
             {
-                raw.Add(new ColorMatch(pigment, percentage, displayColor));
+                AddWithWhiteDecomp(raw, centroids[k], pidx, pigment, percentage, displayColor);
             }
         }
 
@@ -113,6 +111,47 @@ public static class ColorAnalyzer
         return merged;
     }
 
+    // If the centroid is significantly lighter than the pure pigment, split into
+    // Titanium White + pigment. This handles colours like "light grey" which are
+    // really "Payne's Gray + a lot of white", not pure Payne's Gray.
+    private static void AddWithWhiteDecomp(
+        List<ColorMatch> raw,
+        (double L, double A, double B) centroid,
+        int pidx,
+        OilPigment pigment,
+        int percentage,
+        Color displayColor)
+    {
+        // Terminal pigments: no decomposition
+        if (pidx == WhiteIdx || pidx == BlackIdx)
+        {
+            raw.Add(new ColorMatch(pigment, percentage, displayColor));
+            return;
+        }
+
+        double lWhite   = PigmentLab[WhiteIdx].L;
+        double lPigment = PigmentLab[pidx].L;
+        double wFrac    = Math.Clamp((centroid.L - lPigment) / (lWhite - lPigment), 0.0, 1.0);
+
+        if (wFrac > WhiteDecompThreshold)
+        {
+            int wPct = (int)Math.Round(percentage * wFrac);
+            int pPct = percentage - wPct;
+            if (wPct > 0) raw.Add(new ColorMatch(PigmentDatabase.Pigments[WhiteIdx], wPct, PigmentColor(WhiteIdx)));
+            if (pPct > 0) raw.Add(new ColorMatch(pigment, pPct, PigmentColor(pidx)));
+        }
+        else
+        {
+            raw.Add(new ColorMatch(pigment, percentage, displayColor));
+        }
+    }
+
+    private static Color PigmentColor(int idx)
+    {
+        var p = PigmentDatabase.Pigments[idx];
+        return Color.FromArgb(p.R, p.G, p.B);
+    }
+
     // ── Pixel extraction ────────────────────────────────────────────────────
 
     private static List<(byte R, byte G, byte B)> SamplePixels(
@@ -121,7 +160,6 @@ public static class ColorAnalyzer
         sel.Intersect(new Rectangle(0, 0, bmp.Width, bmp.Height));
         if (sel.Width <= 0 || sel.Height <= 0) return [];
 
-        // Extract region as 32bpp ARGB for reliable LockBits access
         using var region = new Bitmap(sel.Width, sel.Height, PixelFormat.Format32bppArgb);
         using (var g = Graphics.FromImage(region))
             g.DrawImage(bmp, new Rectangle(0, 0, sel.Width, sel.Height), sel, GraphicsUnit.Pixel);
@@ -160,7 +198,6 @@ public static class ColorAnalyzer
         {
             bool changed = false;
 
-            // Assignment step
             for (int i = 0; i < points.Length; i++)
             {
                 int best = 0;
@@ -174,11 +211,10 @@ public static class ColorAnalyzer
             }
             if (!changed) break;
 
-            // Update step
             var sumL   = new double[k];
             var sumA   = new double[k];
             var sumB   = new double[k];
-            var counts = new int[k];
+            var cnts   = new int[k];
 
             for (int i = 0; i < points.Length; i++)
             {
@@ -186,12 +222,12 @@ public static class ColorAnalyzer
                 sumL[c] += points[i].L;
                 sumA[c] += points[i].A;
                 sumB[c] += points[i].B;
-                counts[c]++;
+                cnts[c]++;
             }
             for (int c = 0; c < k; c++)
             {
-                if (counts[c] > 0)
-                    centroids[c] = (sumL[c] / counts[c], sumA[c] / counts[c], sumB[c] / counts[c]);
+                if (cnts[c] > 0)
+                    centroids[c] = (sumL[c] / cnts[c], sumA[c] / cnts[c], sumB[c] / cnts[c]);
             }
         }
 
@@ -232,7 +268,7 @@ public static class ColorAnalyzer
 
     // ── Pigment matching ────────────────────────────────────────────────────
 
-    private static OilPigment NearestPigment((double L, double A, double B) lab)
+    private static int NearestPigmentIndex((double L, double A, double B) lab)
     {
         int best = 0;
         double bestDist = double.MaxValue;
@@ -241,10 +277,10 @@ public static class ColorAnalyzer
             double d = ColorUtils.DeltaE(lab, PigmentLab[i]);
             if (d < bestDist) { bestDist = d; best = i; }
         }
-        return PigmentDatabase.Pigments[best];
+        return best;
     }
 
-    private static OilPigment NearestNonGreyPigment((double L, double A, double B) lab)
+    private static int NearestNonGreyPigmentIndex((double L, double A, double B) lab)
     {
         int best = 0;
         double bestDist = double.MaxValue;
@@ -254,7 +290,7 @@ public static class ColorAnalyzer
             double d = ColorUtils.DeltaE(lab, PigmentLab[i]);
             if (d < bestDist) { bestDist = d; best = i; }
         }
-        return PigmentDatabase.Pigments[best];
+        return best;
     }
 
     private static void Normalize(List<ColorMatch> list)
