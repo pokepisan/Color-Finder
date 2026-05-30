@@ -1,3 +1,4 @@
+# Project
 .DS_Store
 node_modules
 /build
@@ -9,3 +10,15 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 src-tauri/target
+
+# Editor
+.vs/
+.localhistory/
+*.suo
+*.user
+*.userosscache
+
+# Misc
+*.log
+__pycache__/
+*.pyc
