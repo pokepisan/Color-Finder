@@ -36,6 +36,11 @@
   let panning = false;
   let panStart = { x: 0, y: 0, px: 0, py: 0 };
 
+  // Multi-touch tracking (pinch-zoom + two-finger pan)
+  const activePointers = new Map<number, { x: number; y: number }>();
+  let pinchDist = 0;
+  let pinchMid  = { x: 0, y: 0 };
+
   // Click-to-pick
   let clickStartCanvas = { x: 0, y: 0 };
   let isDragging = false;
@@ -54,37 +59,32 @@
   let resizeSwatchesStartY = 0;
   let resizeSwatchesStartHeight = 0;
 
-  function onRightHandleDown(e: MouseEvent) {
+  function onRightHandleDown(e: PointerEvent) {
     resizingRight = true;
     resizeRightStartX = e.clientX;
     resizeRightStartWidth = rightColWidth;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     e.preventDefault();
   }
+  function onRightHandleMove(e: PointerEvent) {
+    if (!resizingRight) return;
+    rightColWidth = Math.max(220, Math.min(700, resizeRightStartWidth + (resizeRightStartX - e.clientX)));
+  }
+  function onRightHandleUp() { resizingRight = false; }
 
-  function onSwatchHandleDown(e: MouseEvent) {
+  function onSwatchHandleDown(e: PointerEvent) {
     resizingSwatches = true;
     resizeSwatchesStartY = e.clientY;
     resizeSwatchesStartHeight = swatchesHeight;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     e.preventDefault();
   }
-
-  function onGlobalMouseMove(e: MouseEvent) {
-    if (resizingRight) {
-      const dx = resizeRightStartX - e.clientX;
-      rightColWidth = Math.max(220, Math.min(700, resizeRightStartWidth + dx));
-    }
-    if (resizingSwatches) {
-      const dy = resizeSwatchesStartY - e.clientY;
-      swatchesHeight = Math.max(60, Math.min(300, resizeSwatchesStartHeight + dy));
-    }
+  function onSwatchHandleMove(e: PointerEvent) {
+    if (!resizingSwatches) return;
+    swatchesHeight = Math.max(60, Math.min(300, resizeSwatchesStartHeight + (resizeSwatchesStartY - e.clientY)));
   }
+  function onSwatchHandleUp() { resizingSwatches = false; }
 
-  function onGlobalMouseUp() {
-    resizingRight = false;
-    resizingSwatches = false;
-  }
-
-  // Apply cursor/select lock to body during resize
   $: if (typeof document !== 'undefined') {
     document.body.classList.toggle('resizing-col', resizingRight);
     document.body.classList.toggle('resizing-row', resizingSwatches);
@@ -219,12 +219,25 @@
 
   // ── Main canvas mouse events ──────────────────────────────────────────────
 
-  function onImageMouseDown(e: MouseEvent) {
+  function onImagePointerDown(e: PointerEvent) {
     if (!image) return;
+    imageCanvas.setPointerCapture(e.pointerId);
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.size >= 2) {
+      // Second finger down → switch to pinch/pan mode
+      dragging = false; isDragging = false; panning = false;
+      const pts = [...activePointers.values()];
+      pinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      pinchMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      return;
+    }
+
     const rect = imageCanvas.getBoundingClientRect();
     const cx = (e.clientX - rect.left) * (imageCanvas.width / rect.width);
     const cy = (e.clientY - rect.top) * (imageCanvas.height / rect.height);
 
+    // Middle-click or Alt+click → pan (desktop)
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       panning = true;
       panStart = { x: e.clientX, y: e.clientY, px: panX, py: panY };
@@ -238,8 +251,27 @@
     dragStart = canvasToImage(cx, cy);
   }
 
-  function onImageMouseMove(e: MouseEvent) {
+  function onImagePointerMove(e: PointerEvent) {
     if (!image) return;
+    const prev = activePointers.get(e.pointerId);
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointers.size >= 2 && prev) {
+      // Pinch-zoom + two-finger pan
+      const pts = [...activePointers.values()];
+      const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const newMid  = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      if (pinchDist > 0) {
+        zoom = Math.max(0.1, Math.min(20, zoom * (newDist / pinchDist)));
+        panX += newMid.x - pinchMid.x;
+        panY += newMid.y - pinchMid.y;
+        drawImage();
+      }
+      pinchDist = newDist;
+      pinchMid  = newMid;
+      return;
+    }
+
     const rect = imageCanvas.getBoundingClientRect();
     const cx = (e.clientX - rect.left) * (imageCanvas.width / rect.width);
     const cy = (e.clientY - rect.top) * (imageCanvas.height / rect.height);
@@ -274,7 +306,10 @@
     }
   }
 
-  function onImageMouseUp(e: MouseEvent) {
+  function onImagePointerUp(e: PointerEvent) {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) pinchDist = 0;
+
     const wasDragging = dragging;
     dragging = false;
     panning = false;
@@ -321,8 +356,9 @@
     };
   }
 
-  function onMagMouseDown(e: MouseEvent) {
+  function onMagPointerDown(e: PointerEvent) {
     if (!image || !hasSelection) return;
+    magCanvas.setPointerCapture(e.pointerId);
     const rect = magCanvas.getBoundingClientRect();
     const mx = (e.clientX - rect.left) * (magCanvas.width / rect.width);
     const my = (e.clientY - rect.top) * (magCanvas.height / rect.height);
@@ -333,7 +369,7 @@
     drawMag();
   }
 
-  function onMagMouseMove(e: MouseEvent) {
+  function onMagPointerMove(e: PointerEvent) {
     if (!magDragging) return;
     const rect = magCanvas.getBoundingClientRect();
     const mx = (e.clientX - rect.left) * (magCanvas.width / rect.width);
@@ -356,15 +392,13 @@
     }
   }
 
-  function onMagMouseUp(e: MouseEvent) {
+  function onMagPointerUp(e: PointerEvent) {
     magDragging = false;
 
     if (!magIsDragging && image) {
       const rect = magCanvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left) * (magCanvas.width / rect.width);
       const my = (e.clientY - rect.top) * (magCanvas.height / rect.height);
-      // Define the box in canvas pixels so it draws as a square on screen,
-      // then convert both corners to image space.
       const s0 = magToImage(Math.max(0, mx - MAG_CLICK_PX), Math.max(0, my - MAG_CLICK_PX));
       const s1 = magToImage(Math.min(magCanvas.width, mx + MAG_CLICK_PX), Math.min(magCanvas.height, my + MAG_CLICK_PX));
       magSel = {
@@ -444,7 +478,7 @@
   $: if (magCanvas) { drawMag(); }
 </script>
 
-<svelte:window on:mousemove={onGlobalMouseMove} on:mouseup={onGlobalMouseUp} />
+<svelte:window />
 
 <div class="app">
   <!-- Toolbar -->
@@ -476,10 +510,10 @@
       <canvas
         bind:this={imageCanvas}
         class="panel-canvas"
-        style="cursor: crosshair"
-        on:mousedown={onImageMouseDown}
-        on:mousemove={onImageMouseMove}
-        on:mouseup={onImageMouseUp}
+        style="cursor: crosshair; touch-action: none"
+        on:pointerdown={onImagePointerDown}
+        on:pointermove={onImagePointerMove}
+        on:pointerup={onImagePointerUp}
         on:wheel={onImageWheel}
       ></canvas>
       {#if image}
@@ -493,7 +527,9 @@
       <div
         class="resize-handle-col"
         class:active={resizingRight}
-        on:mousedown={onRightHandleDown}
+        on:pointerdown={onRightHandleDown}
+        on:pointermove={onRightHandleMove}
+        on:pointerup={onRightHandleUp}
       ></div>
 
       <!-- Magnifier -->
@@ -506,10 +542,10 @@
           <canvas
             bind:this={magCanvas}
             class="panel-canvas"
-            style={hasSelection ? 'cursor: crosshair' : 'cursor: default'}
-            on:mousedown={onMagMouseDown}
-            on:mousemove={onMagMouseMove}
-            on:mouseup={onMagMouseUp}
+            style="{hasSelection ? 'cursor: crosshair' : 'cursor: default'}; touch-action: none"
+            on:pointerdown={onMagPointerDown}
+            on:pointermove={onMagPointerMove}
+            on:pointerup={onMagPointerUp}
           ></canvas>
         </div>
         {#if hasSelection}
@@ -560,7 +596,9 @@
       <div
         class="resize-handle-row"
         class:active={resizingSwatches}
-        on:mousedown={onSwatchHandleDown}
+        on:pointerdown={onSwatchHandleDown}
+        on:pointermove={onSwatchHandleMove}
+        on:pointerup={onSwatchHandleUp}
       ></div>
 
       <div class="swatches-scroll">

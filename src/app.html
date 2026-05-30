@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
     <title>Color Finder</title>
-    <meta name="description" content="Oil paint color matching tool" />
+    <meta name="description" content="Oil paint pigment color matching tool" />
 
     <!-- PWA manifest -->
     <link rel="manifest" href="%sveltekit.assets%/manifest.json" />
@@ -13,18 +13,23 @@
     <!-- Standard favicon -->
     <link rel="icon" href="%sveltekit.assets%/icon-192.png" />
 
-    <!-- iOS PWA — makes it open full-screen from home screen -->
+    <!-- iOS PWA — full-screen from home screen, no browser chrome -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Color Finder" />
     <link rel="apple-touch-icon" href="%sveltekit.assets%/icon-512.png" />
 
-    <!-- Theme color (matches toolbar background) -->
-    <meta name="theme-color" content="#13162a" />
+    <!-- Theme / status bar color -->
+    <meta name="theme-color" content="#040d1a" />
 
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">
     <div style="display: contents">%sveltekit.body%</div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('%sveltekit.assets%/sw.js');
+      }
+    </script>
   </body>
 </html>

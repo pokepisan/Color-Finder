@@ -1,21 +1,22 @@
 {
   "name": "Color Finder",
   "short_name": "Color Finder",
-  "description": "Oil paint color matching tool",
-  "start_url": "/",
+  "description": "Oil paint pigment color matching tool",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
-  "background_color": "#0e1120",
-  "theme_color": "#13162a",
+  "background_color": "#040d1a",
+  "theme_color": "#040d1a",
   "orientation": "any",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "./icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
