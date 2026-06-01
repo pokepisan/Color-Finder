@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { analyze, type ColorMatch } from '$lib/colorAnalyzer';
+  import SplashScreen from '$lib/components/SplashScreen.svelte';
+
+  let showSplash = true;
 
   // ── State ────────────────────────────────────────────────────────────────
   let image: HTMLImageElement | null = null;
@@ -479,6 +482,10 @@
 </script>
 
 <svelte:window />
+
+{#if showSplash}
+  <SplashScreen onDone={() => (showSplash = false)} />
+{/if}
 
 <div class="app">
   <!-- Toolbar -->
