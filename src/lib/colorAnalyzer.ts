@@ -26,6 +26,29 @@ function pigmentDist(a: Lab, b: Lab): number {
   return Math.sqrt(dL * dL + dA * dA + dB * dB);
 }
 
+// Single-pixel precise colour pick — skips k-means, analyses one exact RGB value.
+export function analyzeColor(r: number, g: number, b: number): ColorMatch[] {
+  const lab = rgbToLab(r, g, b);
+  const hex = rgbToHex(r, g, b);
+  const raw: ColorMatch[] = [];
+  pigmentDecomp(raw, lab, 100, hex);
+
+  const merged = new Map<string, ColorMatch>();
+  for (const m of raw) {
+    if (merged.has(m.pigment.name)) {
+      const ex = merged.get(m.pigment.name)!;
+      merged.set(m.pigment.name, { ...ex, percentage: ex.percentage + m.percentage });
+    } else {
+      merged.set(m.pigment.name, { ...m });
+    }
+  }
+
+  const result = [...merged.values()].sort((a, b) => b.percentage - a.percentage);
+  const sum = result.reduce((s, m) => s + m.percentage, 0);
+  if (sum !== 0 && sum !== 100) result[0].percentage += 100 - sum;
+  return result;
+}
+
 export function analyze(
   imageData: ImageData,
   sx: number, sy: number, sw: number, sh: number,

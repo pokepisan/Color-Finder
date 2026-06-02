@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { analyze, type ColorMatch } from '$lib/colorAnalyzer';
+  import { analyze, analyzeColor, type ColorMatch } from '$lib/colorAnalyzer';
   import SplashScreen from '$lib/components/SplashScreen.svelte';
 
   let showSplash = true;
@@ -398,22 +398,39 @@
   function onMagPointerUp(e: PointerEvent) {
     magDragging = false;
 
-    if (!magIsDragging && image) {
+    if (!magIsDragging && image && imageData) {
       const rect = magCanvas.getBoundingClientRect();
       const mx = (e.clientX - rect.left) * (magCanvas.width / rect.width);
       const my = (e.clientY - rect.top) * (magCanvas.height / rect.height);
+
+      // Exact image pixel under the cursor
+      const px = Math.max(0, Math.min(imageData.width  - 1,
+        Math.round(sel.x + (mx / magCanvas.width)  * sel.w)));
+      const py = Math.max(0, Math.min(imageData.height - 1,
+        Math.round(sel.y + (my / magCanvas.height) * sel.h)));
+
+      // Analyse that single pixel — bypasses k-means quantisation entirely
+      const idx = (py * imageData.width + px) * 4;
+      const d = imageData.data;
+      matches    = analyzeColor(d[idx], d[idx + 1], d[idx + 2]);
+      status     = 'Single colour picked';
+      isAnalyzing = false;
+
+      // Visual indicator still uses the MAG_CLICK_PX box for legibility
       const s0 = magToImage(Math.max(0, mx - MAG_CLICK_PX), Math.max(0, my - MAG_CLICK_PX));
-      const s1 = magToImage(Math.min(magCanvas.width, mx + MAG_CLICK_PX), Math.min(magCanvas.height, my + MAG_CLICK_PX));
+      const s1 = magToImage(Math.min(magCanvas.width, mx + MAG_CLICK_PX),
+                            Math.min(magCanvas.height, my + MAG_CLICK_PX));
       magSel = {
         x: Math.max(sel.x, s0.x),
         y: Math.max(sel.y, s0.y),
-        w: s1.x - Math.max(sel.x, s0.x),
-        h: s1.y - Math.max(sel.y, s0.y),
+        w: Math.max(1, s1.x - Math.max(sel.x, s0.x)),
+        h: Math.max(1, s1.y - Math.max(sel.y, s0.y)),
       };
       hasMagSelection = true;
       drawMag();
-      runAnalyze(magSel.x, magSel.y, magSel.w, magSel.h);
+
     } else if (hasMagSelection) {
+      // Drag path: analyse the selected region with k-means as before
       runAnalyze(magSel.x, magSel.y, magSel.w, magSel.h);
     }
   }
