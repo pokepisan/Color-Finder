@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { base } from '$app/paths';
 
   export let onDone: () => void;
 
@@ -180,7 +181,7 @@
 
           <!-- ── LEFT: actual portrait image ──────────────────────────────── -->
           <g filter="url(#psf)">
-            <image href="/portrait-ref.jpg"
+            <image href="{base}/portrait-ref.jpg"
                    x="25" y="60" width="220" height="240"
                    preserveAspectRatio="xMidYMid slice"/>
             <rect x="25" y="60" width="220" height="240" fill="none"
