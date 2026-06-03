@@ -53,7 +53,7 @@
     pickupRing.style.opacity = '0';
 
     // Brush starts off-screen below, hidden, at ENTER departure angle
-    brushGroup.setAttribute('transform', `translate(195,422) rotate(-107)`);
+    brushGroup.style.transform = `translate(${(195/700*100).toFixed(3)}%,${(422/390*100).toFixed(3)}%) rotate(-107deg)`;
     brushGroup.style.opacity = '0';
 
     // Panels fade in immediately; brush fades in a beat later
@@ -128,8 +128,8 @@
 
       // Smooth angle blending on every frame — organic, never snaps
       smoothAngle = smoothAngle * 0.78 + targetAngle * 0.22;
-      brushGroup.setAttribute('transform',
-        `translate(${x.toFixed(2)},${y.toFixed(2)}) rotate(${smoothAngle.toFixed(2)})`);
+      brushGroup.style.transform =
+        `translate(${(x/700*100).toFixed(3)}%,${(y/390*100).toFixed(3)}%) rotate(${smoothAngle.toFixed(2)}deg)`;
 
       rafId = requestAnimationFrame(tick);
     }
@@ -230,7 +230,7 @@
           Round bristles at origin (tip), handle tapers to a point in -x.
           Cartoon style: thick black outlines, light wood handle, silver ferrule.
         -->
-        <g bind:this={brushGroup} filter="url(#bsf)">
+        <g bind:this={brushGroup} class="brush-gpu">
 
           <!-- bristles: cream/off-white rounded fan, tip at origin -->
           <path d="M 5,0
@@ -272,7 +272,7 @@
 
       <div class="title-area" bind:this={titleEl}>
         <span class="app-title">Color Finder</span>
-        <span class="app-sub">pigment analysis tool</span>
+        <span class="app-sub">color analysis tool</span>
       </div>
     </div>
   </div>
@@ -323,6 +323,13 @@
     filter: drop-shadow(0 0 18px rgba(167,139,250,0.4));
     font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
   }
+  :global(.brush-gpu) {
+    filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.45));
+    transform-box: view-box;
+    transform-origin: 0% 0%;
+    will-change: transform, opacity;
+  }
+
   .app-sub {
     font-size: 10.5px;
     color: #3b5fa0;

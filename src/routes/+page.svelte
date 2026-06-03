@@ -8,7 +8,7 @@
   // ── State ────────────────────────────────────────────────────────────────
   let image: HTMLImageElement | null = null;
   let imageData: ImageData | null = null;
-  let numColors = 3;
+  const numColors = 3;
   let matches: ColorMatch[] = [];
   let swatches: ColorMatch[][] = [];
   let status = 'Open an image to begin';
@@ -240,6 +240,9 @@
     const cx = (e.clientX - rect.left) * (imageCanvas.width / rect.width);
     const cy = (e.clientY - rect.top) * (imageCanvas.height / rect.height);
 
+    // Right-click → ignore
+    if (e.button === 2) { e.preventDefault(); return; }
+
     // Middle-click or Alt+click → pan (desktop)
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       panning = true;
@@ -453,7 +456,6 @@
   }
 
   let reAnalyzeTimer: ReturnType<typeof setTimeout> | null = null;
-  $: triggerReAnalyze(numColors);
   function triggerReAnalyze(_n: number) {
     if (!imageData || (!hasSelection && !hasMagSelection)) return;
     if (reAnalyzeTimer) clearTimeout(reAnalyzeTimer);
@@ -512,18 +514,6 @@
 
     <button class="btn btn-blue" on:click={openFile}>Open Image</button>
 
-    <label class="colors-label">Colors:
-      <input class="spinner" type="number" min="2" max="6" bind:value={numColors} />
-    </label>
-
-    <button
-      class="btn btn-purple"
-      disabled={matches.length === 0}
-      on:click={saveSwatch}
-    >
-      Save Swatch
-    </button>
-
     <span class="status">{status}</span>
   </header>
 
@@ -535,6 +525,7 @@
         bind:this={imageCanvas}
         class="panel-canvas"
         style="cursor: crosshair; touch-action: none"
+        on:contextmenu|preventDefault
         on:pointerdown={onImagePointerDown}
         on:pointermove={onImagePointerMove}
         on:pointerup={onImagePointerUp}
@@ -607,6 +598,13 @@
                 </div>
               {/each}
             </div>
+            <button
+              class="btn btn-purple save-swatch-btn"
+              disabled={matches.length === 0}
+              on:click={saveSwatch}
+            >
+              Save Swatch
+            </button>
           {/if}
         </div>
       </div>
@@ -738,32 +736,7 @@
     box-shadow: 0 1px 6px rgba(124, 58, 237, 0.3);
   }
   .btn-purple:hover:not(:disabled) { box-shadow: 0 4px 16px rgba(124, 58, 237, 0.5); }
-
-  .colors-label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: #6888cc;
-    white-space: nowrap;
-  }
-  .spinner {
-    width: 50px;
-    padding: 5px 7px;
-    background: #06142890;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: #d0d4ec;
-    font-size: 12px;
-    text-align: center;
-    font-family: inherit;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-  .spinner:focus {
-    outline: none;
-    border-color: rgba(124, 58, 237, 0.55);
-    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.14);
-  }
+  .save-swatch-btn { margin: 10px 12px 4px; width: calc(100% - 24px); }
 
   .status {
     margin-left: auto;
