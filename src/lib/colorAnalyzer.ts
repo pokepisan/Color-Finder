@@ -1,4 +1,4 @@
-import { rgbToLab, deltaE, type Lab } from './colorUtils';
+import { rgbToLab, linearRgbToLab, srgbToLinear, deltaE, deltaE2000, type Lab } from './colorUtils';
 import { PIGMENTS, WHITE_IDX, BLACK_IDX, type OilPigment } from './pigments';
 
 export interface ColorMatch {
@@ -9,21 +9,36 @@ export interface ColorMatch {
 
 const PIGMENT_LAB: Lab[] = PIGMENTS.map(p => rgbToLab(p.r, p.g, p.b));
 
+// Log of each pigment's linear-light reflectance, per channel. Working in
+// log-reflectance lets us model paint mixing as a *subtractive* process: a
+// blend's reflectance is the weighted geometric mean of its components'
+// reflectances, i.e. a linear interpolation of absorbance (−ln reflectance).
+// This is the single-constant Kubelka–Munk approximation usable when only RGB
+// is known, and unlike linear-Lab averaging it reproduces real pigment
+// behaviour (e.g. blue + yellow → green, not grey).
+const REFL_EPS = 1e-4;
+const PIGMENT_LN_REFL = PIGMENTS.map(p => ({
+  r: Math.log(Math.max(srgbToLinear(p.r), REFL_EPS)),
+  g: Math.log(Math.max(srgbToLinear(p.g), REFL_EPS)),
+  b: Math.log(Math.max(srgbToLinear(p.b), REFL_EPS)),
+}));
+
 // Below this chroma the color is treated as neutral (White ↔ Black by L only)
 const NEUTRAL_CHROMA = 8;
 // Don't emit a secondary pigment if its share would be below this fraction
 const MIN_MIX_FRAC = 0.06;
+// Resolution of the mixing-ratio search along each pigment pair (≈6 %/step).
+const MIX_STEPS = 16;
 
-// Perceptual distance weighted for pigment identification.
-// Insight from Stockman (2023) / CIE cone fundamentals: chromaticity (a, b)
-// dominates hue identity — lightness can be adjusted by mixing, hue cannot.
-// Weight L at 55 % of ab so the pair search strongly favours hue correctness.
-const L_WEIGHT = 0.55;
-function pigmentDist(a: Lab, b: Lab): number {
-  const dL = (a.l - b.l) * L_WEIGHT;
-  const dA = a.a - b.a;
-  const dB = a.b - b.b;
-  return Math.sqrt(dL * dL + dA * dA + dB * dB);
+// Lab colour of mixing pigments i and j with weight f on j (0 = all i, 1 = all j),
+// under the subtractive model described above.
+function subtractiveMixLab(i: number, j: number, f: number): Lab {
+  const a = PIGMENT_LN_REFL[i];
+  const b = PIGMENT_LN_REFL[j];
+  const rl = Math.exp(a.r + f * (b.r - a.r));
+  const gl = Math.exp(a.g + f * (b.g - a.g));
+  const bl = Math.exp(a.b + f * (b.b - a.b));
+  return linearRgbToLab(rl, gl, bl);
 }
 
 // Single-pixel precise colour pick — skips k-means, analyses one exact RGB value.
@@ -105,13 +120,15 @@ export function analyze(
 
 // ── Pigment decomposition ─────────────────────────────────────────────────────
 //
-// For each cluster centroid we search ALL pairs of pigments and find the pair
-// whose interpolated line segment in Lab space passes closest to the target.
-// The optimal fraction on that segment is computed analytically (orthogonal
-// projection), giving the exact minimum ΔE76 for any linear mix of that pair.
-//
-// This replaces the old hue-angle heuristic, which was numerically unstable
-// for dark/desaturated colours and mixed radians with lightness on the wrong scale.
+// For each cluster centroid we search every pigment singly and every pigment
+// PAIR, sampling the mixing ratio along the pair under the subtractive
+// (Kubelka–Munk-style) mixing model, and keep the combination whose mixed colour
+// is closest to the target in CIEDE2000. ΔE2000 is the perceptually-correct
+// metric (Stockman / CIE cone fundamentals: matches happen at the cone level),
+// and the subtractive model means a "mix" follows the real pigment path through
+// colour space rather than a straight Lab line — so lightness no longer needs an
+// ad-hoc down-weight, because darkening/lightening is achieved by mixing toward
+// black/white as genuine palette members.
 
 function pigmentDecomp(
   raw: ColorMatch[], centroid: Lab, percentage: number, displayColor: string
@@ -138,32 +155,19 @@ function pigmentDecomp(
 
   // Single-pigment candidates
   for (let i = 0; i < n; i++) {
-    const dE = pigmentDist(PIGMENT_LAB[i], centroid);
+    const dE = deltaE2000(PIGMENT_LAB[i], centroid);
     if (dE < bestDE) { bestDE = dE; bestI = i; bestJ = -1; bestF = 0; }
   }
 
-  // Two-pigment pairs: project centroid onto each segment P_i → P_j
-  // using the same weighted metric so hue dominates the optimal fraction too.
+  // Two-pigment subtractive blends: sample the mixing ratio and keep the best.
+  // The mix path is non-linear in Lab, so we scan it rather than projecting.
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const dL = (PIGMENT_LAB[j].l - PIGMENT_LAB[i].l) * L_WEIGHT;
-      const dA =  PIGMENT_LAB[j].a - PIGMENT_LAB[i].a;
-      const dB =  PIGMENT_LAB[j].b - PIGMENT_LAB[i].b;
-      const segLen2 = dL * dL + dA * dA + dB * dB;
-      if (segLen2 < 1e-6) continue;
-
-      // Weighted projection: f* = dot(target - P_i, P_j - P_i) / |P_j - P_i|²
-      const eL = (centroid.l - PIGMENT_LAB[i].l) * L_WEIGHT;
-      const eA =  centroid.a - PIGMENT_LAB[i].a;
-      const eB =  centroid.b - PIGMENT_LAB[i].b;
-      const f  = clamp((eL * dL + eA * dA + eB * dB) / segLen2, 0, 1);
-
-      const mixL = PIGMENT_LAB[i].l + f * (PIGMENT_LAB[j].l - PIGMENT_LAB[i].l);
-      const mixA = PIGMENT_LAB[i].a + f * dA;
-      const mixB = PIGMENT_LAB[i].b + f * dB;
-
-      const dE = pigmentDist({ l: mixL, a: mixA, b: mixB }, centroid);
-      if (dE < bestDE) { bestDE = dE; bestI = i; bestJ = j; bestF = f; }
+      for (let s = 1; s < MIX_STEPS; s++) {
+        const f = s / MIX_STEPS;
+        const dE = deltaE2000(subtractiveMixLab(i, j, f), centroid);
+        if (dE < bestDE) { bestDE = dE; bestI = i; bestJ = j; bestF = f; }
+      }
     }
   }
 
